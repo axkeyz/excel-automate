@@ -1,4 +1,6 @@
+SetExcelFile user/uploads/SampleData.xlsx
 SetActiveSheet SalesOrders
 InsertNewCol G
 UpdateColFormula G F[RowNum] * 7
 OrderCol E D A B C F G H
+SaveFileAs user/results/TestOutput.xlsx

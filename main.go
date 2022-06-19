@@ -25,30 +25,13 @@ func MakeFile() {
 	}
 }
 
-func OpenUpload() {
-	f, err := excelize.OpenFile("user/uploads/SampleData.xlsx")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer func() {
-		// Close the spreadsheet.
-		if err := f.Close(); err != nil {
-			fmt.Println(err)
-		}
-	}()
-
-	for index, name := range f.GetSheetMap() {
-		fmt.Println(index, name)
-	}
-}
-
-func main() {
+// SetExcelFile opens up an excel file by its path.
+func SetExcelFile(file_path string) *excelize.File {
 	// Open Data
-	data, err := excelize.OpenFile("user/uploads/SampleData.xlsx")
+	data, err := excelize.OpenFile(file_path)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return nil
 	}
 	defer func() {
 		// Close the spreadsheet.
@@ -56,6 +39,13 @@ func main() {
 			fmt.Println(err)
 		}
 	}()
+
+	return data
+}
+
+func main() {
+	// Open Data
+	var data *excelize.File
 
 	// Open Template
 	template, err := os.Open("user/templates/test.txt")
@@ -72,7 +62,9 @@ func main() {
 	for scanner.Scan() {
 		command := strings.Split(scanner.Text(), " ")
 
-		if command[0] == "SetActiveSheet" {
+		if command[0] == "SetExcelFile" {
+			data = SetExcelFile(command[1])
+		} else if command[0] == "SetActiveSheet" {
 			// Set active sheet
 			sheet = command[1]
 			SetActiveSheet(data, sheet)
@@ -82,6 +74,8 @@ func main() {
 			InsertNewCol(data, sheet, command[1])
 		} else if command[0] == "UpdateColFormula" {
 			UpdateColFormula(data, sheet, command)
+		} else if command[0] == "SaveFileAs" {
+			SaveFileAs(data, command[1])
 		} else {
 			fmt.Printf("%s command doesn't exist (yet?)\n", command[0])
 		}
@@ -95,10 +89,6 @@ func main() {
 	fmt.Println("\n\nSample Output...")
 	for i := 0; i < 2; i++ {
 		fmt.Println(rows[i])
-	}
-
-	if err := data.SaveAs("user/results/Book1.xlsx"); err != nil {
-		fmt.Println(err)
 	}
 }
 
@@ -166,6 +156,50 @@ func UpdateColFormula(data *excelize.File, sheet string, command []string) {
 }
 
 // ReplaceFormulaRows inserts row values into a formula string with placeholders.
-func ReplaceFormulaRows(formula string, replacement string) string {
-	return strings.Replace(formula, "[RowNum]", replacement, -1)
+func ReplaceFormulaRows(formula string, row_number string) string {
+	return strings.Replace(formula, "[RowNum]", row_number, -1)
+}
+
+// UpdateRowFormula iterates through a column and sets all values as
+// the given formula.
+func UpdateRowFormula(data *excelize.File, sheet string, command []string) {
+	// Get rows and counts
+	cols, _ := data.GetCols(sheet)
+	num_cols := len(cols)
+
+	// Generate formula
+	formula := strings.Join(command[2:], " ")
+
+	for i := 0; i < num_cols; i++ {
+		// Add formula to each cell, replacing formula row placeholder if necessary
+		cell := strconv.Itoa(i + 1)
+		data.SetCellFormula(sheet, command[1]+cell, "="+ReplaceFormulaCols(formula, cell))
+	}
+
+	fmt.Printf("Row %s updated with formula %s...\n", command[1], formula)
+}
+
+// ReplaceFormulaCols inserts col values into a formula string with placeholders.
+func ReplaceFormulaCols(formula string, column_number string) string {
+	return strings.Replace(formula, "[ColNum]", column_number, -1)
+}
+
+// SaveFileAs saves the data according to the file name.
+func SaveFileAs(data *excelize.File, file_name string) {
+	// Update cell formulas.
+	data.UpdateLinkedValue()
+
+	if err := data.SaveAs(file_name); err != nil {
+		fmt.Println(err)
+	}
+}
+
+// SetSingleCellValue sets a single cell value to the given value or formula.
+func SetSingleCellValue(data *excelize.File, sheet string, cell string,
+	value string, is_formula bool) {
+	if is_formula {
+		data.SetCellFormula(sheet, cell, "="+value)
+	} else {
+		data.SetCellValue(sheet, cell, value)
+	}
 }
